@@ -29,6 +29,7 @@ _LINK_FILES() {
         SOURCE_FILE=$1; SINK_FILE=$2
         [ "$DRY_RUN" -eq 1 ] && return 0
         [ "$VERBOSE" -eq 1 ] && ln -srv $SOURCE_FILE $SINK_FILE
+        [ "$VERBOSE" -eq 0 ] && ln -sr $SOURCE_FILE $SINK_FILE
 }
 _CHECK_FILE() {
         # 1 => SINK_FILE is a directory
@@ -176,42 +177,69 @@ dls [OPTION ...] [-D|-S|-R] PKG ... [-D|-S|-R] PKG ...
 
 OPTIONS:
 
-    -v      verbose (print what is happening)
-    -n      Run in dry mode (do not change anything in file system)
-    -f      Overwrite any file (no symbolic link or dir) (be careful)
-    -b      Overwrite broken symbolic link
-    -l      Overwrite any symbolic link (foreign symbolic link)
-    -h      Print this helpful message. (hopefully)
-    -t DIR  Change the Target dir.
-    -S PKG  link the Package. (stow -S like)
-    -D PKG  UN link the Package. (stow -D like)
-    -R PKG  Re link the Package. (stow -R like)
+    -v  --verbose             verbose (print what is happening)
+    -n  --simulate            Run in dry mode (do not change anything in file system)
+    -f  --overwrite--files    Overwrite any file (no symbolic link or dir) (be careful)
+    -b  --overwrite--broken   Overwrite broken symbolic link
+    -l  --overwrite-link      Overwrite any symbolic link (foreign symbolic link)
+    -h  --help                Print this helpful message. (hopefully)
+    -t DIR --target DIR       Change the Target dir.
+    -S PKG --link PKG         link the Package. (stow -S like)
+    -D PKG --delete PKG       UN link the Package. (stow -D like)
+    -R PKG --re-link PKG      Re link the Package. (stow -R like)
+
+author: liupold <rohn.ch@gmail.com>
 "
 
 }
 
-check_input() {
-    local OPTIND opt i
-    while getopts ":hfblvnt:S:D:R:" opt; do
-            case $opt in
-                    h) useage && exit 0 ;;
-                    f) OVERWRITE_FILES=1;;
-                    b) OVERWRITE_BROKEN_SYM_LINK=1;;
-                    l) OVERWRITE_FOREIGN_SYM_LINK=1;;
-                    v) VERBOSE=1;;
-                    n) DRY_RUN=1;;
-                    t) TARGET_DIR="$OPTARG";;
-                    S) S_="$S_ $OPTARG";;
-                    D) D_="$S_ $OPTARG";;
-                    R) R_="$R_ $OPTARG";;
-                    \?)
-                            echo "Unrecognised option '$opt'"
-                            useage && exit 1;;
-            esac
-     done
-     shift $((OPTIND -1))
-     CHECK_AND_RUN_FOR_PKGs UNLINK_FILE "$D_ $R_" "$TARGET_DIR"
-     CHECK_AND_RUN_FOR_PKGs LINK_FILE "$S_ $R_" "$TARGET_DIR"
-}
+TEMP=$(getopt -o 'hfblvnt:S:D:R:' --long 'help,overwrite-files,overwrite-broken,overwrite-link,verbose,simulate,target:,link:,delete:,re-link:' -n 'dls' -- "$@")
 
-check_input $@
+[ "$?" -ne 0 ] && useage && exit 1
+
+eval set -- "$TEMP"
+unset TEMP
+
+while true; do
+    case "$1" in
+        '-h'|'--help')
+            useage && exit 0
+            shift; continue;;
+        '-f'|'--overwrite-files')
+            OVERWRITE_FILES=1
+            shift; continue;;
+        '-b'|'--overwrite-broken')
+            OVERWRITE_BROKEN_SYM_LINK=1
+            shift; continue;;
+        '-l'|'--overwrite-link')
+            OVERWRITE_FOREIGN_SYM_LINK=1
+            shift; continue;;
+        '-v'|'--verbose')
+            VERBOSE=1
+            shift; continue;;
+        '-n'|'--simulate')
+            DRY_RUN=1
+            shift; continue;;
+        '-t'|'--target')
+            TARGET_DIR="$2"
+            shift 2; continue;;
+        '-S'|'--link')
+            S_="$S_ $2"
+            shift 2; continue;;
+        '-D'|'--delete')
+            D_="$D_ $2"
+            shift 2; continue;;
+        '-R'|'--re-link')
+            R_="$R_ $2"
+            shift 2; continue;;
+         '--')
+             shift; break;;
+            *)
+             echo 'Internal error!' >&2
+             useage && exit 1;;
+     esac
+done
+
+CHECK_AND_RUN_FOR_PKGs UNLINK_FILE "$D_ $R_" "$TARGET_DIR"
+CHECK_AND_RUN_FOR_PKGs LINK_FILE  "$S_ $R_" "$TARGET_DIR"
+
