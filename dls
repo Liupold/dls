@@ -1,0 +1,217 @@
+#!/bin/sh
+
+EC='\033[0;31m' # Error color
+WC='\033[0;33m ' # Warning color
+NC='\033[0m' # No color
+
+DRY_RUN=0
+VERBOSE=0
+OVERWRITE_BROKEN_SYM_LINK=1; OVERWRITE_FOREIGN_SYM_LINK=0
+OVERWRITE_FILES=0;
+
+WARN() {
+        msg="$1"
+        printf "${WC}WARNING${NC}: $msg\n"
+}
+
+ERR() {
+        msg="$1"; code=$2
+        printf "${EC}ERROR${NC}: $msg\n"
+        [ -z "$code" ] && return 1 # if no code is specified
+        exit $code
+}
+
+Vecho() {
+        [ "$VERBOSE" -eq 1 ] && echo "$@"
+}
+
+_LINK_FILES() {
+        SOURCE_FILE=$1; SINK_FILE=$2
+        [ "$DRY_RUN" -eq 1 ] && return 0
+        [ "$VERBOSE" -eq 1 ] && ln -srv $SOURCE_FILE $SINK_FILE
+}
+_CHECK_FILE() {
+        # 1 => SINK_FILE is a directory
+        # 2 => SINK_FILE Do not Exist (clean)
+        # 3 => SINK_FILE exits ( Non Sym link )
+        # 4 => SINK_FILE exits ( Broken Sym link )
+        # 5 => SINK_FILE points to SOURCE_FILE
+        # 6 => FILE exits ( Sym link but not pointing to SOURCE )
+        SOURCE_FILE=$1; SINK_FILE=$2
+
+        [ -d "$SINK_FILE" ] && return 1
+        ls "$SINK_FILE" >/dev/null 2>&1 || return 2
+        [ -L "$SINK_FILE" ] || return 3
+        [ -e "$SINK_FILE" ] || return 4
+        [ "$SINK_FILE" -ef "$SOURCE_FILE" ] && return 5
+        [ "$SINK_FILE" -ef "$SOURCE_FILE" ] || return 6
+}
+
+_H_FILE() {
+        SOURCE_FILE=$1; SINK_FILE=$2
+        [ "$OVERWRITE_FILES" -eq 0 ] && ERR "File Exist $SINK_FILE ($SOURCE_FILE)"
+        [ "$OVERWRITE_FILES" -eq 0 ] && return 1
+        [ "$DRY_RUN" -eq 1 ] && return 0
+        [ "$OVERWRITE_FILES" -eq 1 ] && rm $SINK_FILE
+        _LINK_FILES $SOURCE_FILE $SINK_FILE
+}
+
+_H_BROKEN_SYM_LINK() {
+        SOURCE_FILE=$1; SINK_FILE=$2
+        [ "$OVERWRITE_FILES" -eq 0 ] && \
+                ERR "A broken link Exist $SINK_FILE ($SOURCE_FILE)" || return 1
+        [ "$DRY_RUN" -eq 1 ] && return 0
+        [ "$OVERWRITE_BROKEN_SYM_LINK" -eq 1 ] && rm $SINK_FILE
+        _LINK_FILES $SOURCE_FILE $SINK_FILE
+}
+
+_H_FOREIGN_SYM_LINK() {
+        SOURCE_FILE=$1; SINK_FILE=$2
+        [ "$OVERWRITE_FILES" -eq 0 ] && \
+                ERR "A foreign link Exist $SINK_FILE ($SOURCE_FILE)" || return 1
+        [ "$OVERWRITE_FOREIGN_SYM_LINK" -eq 0 ] && return 1
+        [ "$DRY_RUN" -eq 1 ] && return 0
+        [ "$OVERWRITE_FOREIGN_SYM_LINK" -eq 1 ] && rm $SINK_FILE
+        _LINK_FILES $SOURCE_FILE $SINK_FILE
+}
+
+LINK_FILE() {
+        SOURCE_DIR=$1; SOURCE_FILE=$2; TARGET_DIR=$3;
+
+        SINK_FILE="$(echo "$SOURCE_FILE" | sed "s|^$SOURCE_DIR/|$TARGET_DIR/|g")"
+        mkdir -p $(dirname $SINK_FILE) # Making source dir
+        _CHECK_FILE $SOURCE_FILE $SINK_FILE
+        _CHECK_FILE_CODE=$?
+
+         case $_CHECK_FILE_CODE in
+                 1)
+                         ERR "$SINK_FILE is a directory can't link ($SOURCE_FILE)"
+                         return 1;;
+                 2)
+                         _LINK_FILES $SOURCE_FILE $SINK_FILE
+                         return 0;;
+                 3)
+                         _H_FILE $SOURCE_FILE $SINK_FILE
+                         return $?;;
+                 4)
+                         _H_BROKEN_SYM_LINK $SOURCE $SINK_FILE
+                         return $?;;
+                 5)
+                         Vecho "$SOURCE_FILE => $SINK_FILE (already linked)"
+                         return 0;;
+                 6)
+                         _H_FOREIGN_SYM_LINK $SOURCE_FILE $SINK_FILE
+                         return $?;;
+                 *)
+                         ERR "_CHECK_FILE returned unknown code ($_CHECK_FILE_CODE)" 1;;
+            esac
+}
+
+UNLINK_FILE() {
+        SOURCE_DIR=$1; SOURCE_FILE=$2; TARGET_DIR=$3;
+
+        SINK_FILE="$(echo "$SOURCE_FILE" | sed "s|^$SOURCE_DIR/|$TARGET_DIR/|g")"
+        mkdir -p $(dirname $SINK_FILE) # Making source dir
+        _CHECK_FILE $SOURCE_FILE $SINK_FILE
+        _CHECK_FILE_CODE=$?
+
+         case $_CHECK_FILE_CODE in
+                 5)
+                         Vecho "Deleted: $SINK_FILE (-> $SOURCE_FILE)"
+                         [ "$DRY_RUN" -eq 1 ] && return 0
+                         rm $SINK_FILE
+                         return 0;;
+                 2)
+                         return 0;;
+                 *)
+                         ERR "cannot safely unlink file ($SINK_FILE) ($_CHECK_FILE_CODE)"
+                         return 1;;
+            esac
+
+}
+
+FOR_EACH_FILE_IN_PKG() {
+    FUNC=$1; SOURCE_DIR=$2; TARGET_DIR=$3
+    SOURCE_FILEs="$(find $SOURCE_DIR -type f)"
+    return_code=0;
+
+    for SOURCE_FILE in $SOURCE_FILEs
+    do
+            $FUNC $SOURCE_DIR $SOURCE_FILE $TARGET_DIR
+            [ "$?" -ne 0 ] && return_code=1
+    done
+    return $return_code
+}
+
+CHECK_AND_RUN_FOR_PKGs() {
+         # do a dry run before changing anything
+
+         FUNC=$1; SOURCE_DIRs="$2"; TARGET_DIR=$3
+         pVERBOSE=$VERBOSE; pDRY_RUN=$DRY_RUN; DRY_RUN=1
+         [ "$pDRY_RUN" -eq 0 ]  && VERBOSE=0
+         for SOURCE_DIR in $SOURCE_DIRs
+         do
+                 [ -d "$SOURCE_DIR" ] || ERR "Cannot find folder '$SOURCE_DIR'!" 1
+                 FOR_EACH_FILE_IN_PKG $FUNC $SOURCE_DIR $TARGET_DIR || ERR "All Abort!" 1
+         done
+
+         [ "$pDRY_RUN" -eq 1 ]  && return 0
+         DRY_RUN=$pDRY_RUN && VERBOSE=$pVERBOSE
+         for SOURCE_DIR in $SOURCE_DIRs
+         do
+                 FOR_EACH_FILE_IN_PKG $FUNC $SOURCE_DIR $TARGET_DIR
+         done
+}
+
+S_=""; D_=""; R_=""
+TARGET_DIR="$HOME"
+
+useage() {
+        echo "dls (dotfiles linking script) (compatible with GNU stow)
+POSIX compatible script. requirement: find, ls, ln
+
+SYNOPSIS:
+
+dls [OPTION ...] [-D|-S|-R] PKG ... [-D|-S|-R] PKG ...
+
+OPTIONS:
+
+    -v      verbose (print what is happening)
+    -n      Run in dry mode (do not change anything in file system)
+    -f      Overwrite any file (no symbolic link or dir) (be careful)
+    -b      Overwrite broken symbolic link
+    -l      Overwrite any symbolic link (foreign symbolic link)
+    -h      Print this helpful message. (hopefully)
+    -t DIR  Change the Target dir.
+    -S PKG  link the Package. (stow -S like)
+    -D PKG  UN link the Package. (stow -D like)
+    -R PKG  Re link the Package. (stow -R like)
+"
+
+}
+
+check_input() {
+    local OPTIND opt i
+    while getopts ":hfblvnt:S:D:R:" opt; do
+            case $opt in
+                    h) useage && exit 0 ;;
+                    f) OVERWRITE_FILES=1;;
+                    b) OVERWRITE_BROKEN_SYM_LINK=1;;
+                    l) OVERWRITE_FOREIGN_SYM_LINK=1;;
+                    v) VERBOSE=1;;
+                    n) DRY_RUN=1;;
+                    t) TARGET_DIR="$OPTARG";;
+                    S) S_="$S_ $OPTARG";;
+                    D) D_="$S_ $OPTARG";;
+                    R) R_="$R_ $OPTARG";;
+                    \?)
+                            echo "Unrecognised option '$opt'"
+                            useage && exit 1;;
+            esac
+     done
+     shift $((OPTIND -1))
+     CHECK_AND_RUN_FOR_PKGs UNLINK_FILE "$D_ $R_" "$TARGET_DIR"
+     CHECK_AND_RUN_FOR_PKGs LINK_FILE "$S_ $R_" "$TARGET_DIR"
+}
+
+check_input $@
