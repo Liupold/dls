@@ -186,7 +186,8 @@ OPTIONS:
 author: liupold <rohn.ch@gmail.com>
 "
 
-exit "$1"
+[ -n "$1" ] && exit "$1"
+
 }
 
 TEMP=$(getopt -o 'hfblvnt:S:D:R:' --long 'help,overwrite-files,overwrite-broken,overwrite-link,verbose,simulate,target:,link:,delete:,re-link:' -n 'dls' -- "$@") || useage 1
