@@ -1,21 +1,25 @@
 #!/bin/sh
 
+_CHECK_REQUIREMENT() {
+        which --skip-alias "$1" >/dev/null || ERR "$1 required [NOT FOUND]" 1
+}
+
+_CHECK_REQUIREMENT readlink; _CHECK_REQUIREMENT realpath
+_CHECK_REQUIREMENT find; _CHECK_REQUIREMENT ls; _CHECK_REQUIREMENT ln
+
 DRY_RUN=0
 VERBOSE=0
 OVERWRITE_BROKEN_SYM_LINK=1; OVERWRITE_FOREIGN_SYM_LINK=0
 OVERWRITE_FILES=0;
 
 WARN() {
-        msg="$1"
-        echo "WARNING: $msg"
+        echo "WARNING: $1"
 }
 
 ERR() {
-        msg="$1"
-        code="$2"
-        echo "ERROR: $msg" >&2
-        [ -z "$code" ] && return 1 # if no code is specified
-        exit "$code"
+        echo "ERROR: $1" >&2
+        [ -z "$2" ] && return 1 # if no code is specified
+        exit "$2"
 }
 
 Vecho() {
@@ -214,6 +218,7 @@ while true; do
             shift; continue;;
         '-n'|'--simulate')
             DRY_RUN=1
+            WARN "running in simulate (nothing will be changed in file system)"
             shift; continue;;
         '-t'|'--target')
             TARGET_DIR="$2"
