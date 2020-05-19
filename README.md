@@ -4,7 +4,7 @@ dotfiles linker (similar to stow, written in POSIX compatible script and with ov
 
 ``` console
 dls (dotfiles linking script) (compatible with GNU stow)
-POSIX compatible script. requirement: find, ls, ln, readlink, realpath
+POSIX compatible script. requirement: find, ls, ln, realpath
 
 SYNOPSIS:
 
