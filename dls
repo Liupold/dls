@@ -4,8 +4,8 @@ _CHECK_REQUIREMENT() {
         which --skip-alias "$1" >/dev/null || ERR "$1 required [NOT FOUND]" 1
 }
 
-_CHECK_REQUIREMENT readlink; _CHECK_REQUIREMENT realpath
-_CHECK_REQUIREMENT find; _CHECK_REQUIREMENT ls; _CHECK_REQUIREMENT ln
+_CHECK_REQUIREMENT realpath; _CHECK_REQUIREMENT find
+_CHECK_REQUIREMENT ls; _CHECK_REQUIREMENT ln
 
 DRY_RUN=0
 VERBOSE=0
@@ -45,8 +45,8 @@ _CHECK_FILE() {
         ls "$SINK_FILE" >/dev/null 2>&1 || return 20
         [ -L "$SINK_FILE" ] || return 30
         [ -e "$SINK_FILE" ] || return 40
-        [ "$(readlink -f "$SINK_FILE")" = "$(realpath "$SOURCE_FILE")" ] && return 50
-        [ "$(readlink -f "$SINK_FILE")" = "$(realpath "$SOURCE_FILE")" ] && return 60
+        [ "$(realpath "$SINK_FILE")" = "$(realpath "$SOURCE_FILE")" ] && return 50
+        [ "$(realpath "$SINK_FILE")" = "$(realpath "$SOURCE_FILE")" ] || return 60
 }
 
 _H_FILE() {
@@ -168,7 +168,7 @@ TARGET_DIR="$HOME"
 
 useage() {
         echo "dls (dotfiles linking script) (compatible with GNU stow)
-POSIX compatible script. requirement: find, ls, ln, readlink, realpath
+POSIX compatible script. requirement: find, ls, ln, realpath
 
 SYNOPSIS:
 
