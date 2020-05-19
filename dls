@@ -1,7 +1,7 @@
 #!/bin/sh
 
 _CHECK_REQUIREMENT() {
-        which --skip-alias "$1" >/dev/null || ERR "$1 required [NOT FOUND]" 1
+        $1 --version >/dev/null || ERR "$1 required [NOT FOUND]" 1
 }
 
 _CHECK_REQUIREMENT realpath; _CHECK_REQUIREMENT find
@@ -23,14 +23,15 @@ ERR() {
 }
 
 Vecho() {
-        [ "$VERBOSE" -eq 1 ] && echo "$@"
+        [ "${VERBOSE}" -eq 1 ] && echo "$@"
 }
 
 _LINK_FILES() {
         SOURCE_FILE=$1; SINK_FILE=$2
-        [ "$DRY_RUN" -eq 1 ] && return 0
-        [ "$VERBOSE" -eq 1 ] && ln -srv "$SOURCE_FILE" "$SINK_FILE"
-        [ "$VERBOSE" -eq 0 ] && ln -sr "$SOURCE_FILE" "$SINK_FILE"
+        [ "${DRY_RUN}" -eq 1 ] && return 0
+        [ "${VERBOSE}" -eq 1 ] && ln -srv "${SOURCE_FILE}" "${SINK_FILE}"
+        [ "${VERBOSE}" -eq 0 ] && ln -sr "${SOURCE_FILE}" "${SINK_FILE}"
+        return 0
 }
 _CHECK_FILE() {
         # 10 => SINK_FILE is a directory
@@ -41,91 +42,93 @@ _CHECK_FILE() {
         # 60 => FILE exits ( Sym link but not pointing to SOURCE )
         SOURCE_FILE=$1; SINK_FILE=$2
 
-        [ -d "$SINK_FILE" ] && return 10
-        ls "$SINK_FILE" >/dev/null 2>&1 || return 20
-        [ -L "$SINK_FILE" ] || return 30
-        [ -e "$SINK_FILE" ] || return 40
-        [ "$(realpath "$SINK_FILE")" = "$(realpath "$SOURCE_FILE")" ] && return 50
-        [ "$(realpath "$SINK_FILE")" = "$(realpath "$SOURCE_FILE")" ] || return 60
+        [ -d "${SINK_FILE}" ] && return 10
+        ls "${SINK_FILE}" >/dev/null 2>&1 || return 20
+        [ -L "${SINK_FILE}" ] || return 30
+        [ -e "${SINK_FILE}" ] || return 40
+        [ "$(realpath "${SINK_FILE}")" = "$(realpath "${SOURCE_FILE}")" ] && return 50
+        [ "$(realpath "${SINK_FILE}")" = "$(realpath "${SOURCE_FILE}")" ] || return 60
 }
 
 _H_FILE() {
         SOURCE_FILE=$1; SINK_FILE=$2
-        [ "$OVERWRITE_FILES" -eq 0 ] && ERR "File Exist $SINK_FILE ($SOURCE_FILE)"
-        [ "$OVERWRITE_FILES" -eq 0 ] && return 1
-        [ "$DRY_RUN" -eq 1 ] && return 0
-        [ "$OVERWRITE_FILES" -eq 1 ] && rm "$SINK_FILE"
-        _LINK_FILES "$SOURCE_FILE" "$SINK_FILE"
+        [ "${OVERWRITE_FILES}" -eq 0 ] && \
+                ERR "File Exist ${SINK_FILE} (${SOURCE_FILE})"
+        [ "${OVERWRITE_FILES}" -eq 0 ] && return 1
+        [ "${DRY_RUN}" -eq 1 ] && return 0
+        [ "${OVERWRITE_FILES}" -eq 1 ] && rm "${SINK_FILE}"
+        _LINK_FILES "${SOURCE_FILE}" "${SINK_FILE}"
 }
 
 _H_BROKEN_SYM_LINK() {
         SOURCE_FILE=$1; SINK_FILE=$2
-        [ "$OVERWRITE_FILES" -eq 0 ] && \
-                ERR "A broken link Exist $SINK_FILE ($SOURCE_FILE)" || return 1
-        [ "$DRY_RUN" -eq 1 ] && return 0
-        [ "$OVERWRITE_BROKEN_SYM_LINK" -eq 1 ] && rm "$SINK_FILE"
-        _LINK_FILES "$SOURCE_FILE" "$SINK_FILE"
+        [ "${OVERWRITE_BROKEN_SYM_LINK}" -eq 0 ] && \
+                ERR "A broken link Exist ${SINK_FILE} (${SOURCE_FILE})"
+        [ "${OVERWRITE_BROKEN_SYM_LINK}" -eq 0 ] && return 1
+        [ "${DRY_RUN}" -eq 1 ] && return 0
+        [ "${OVERWRITE_BROKEN_SYM_LINK}" -eq 1 ] && rm "${SINK_FILE}"
+        _LINK_FILES "${SOURCE_FILE}" "${SINK_FILE}"
 }
 
 _H_FOREIGN_SYM_LINK() {
         SOURCE_FILE=$1; SINK_FILE=$2
-        [ "$OVERWRITE_FILES" -eq 0 ] && \
-                ERR "A foreign link Exist $SINK_FILE ($SOURCE_FILE)" || return 1
-        [ "$OVERWRITE_FOREIGN_SYM_LINK" -eq 0 ] && return 1
-        [ "$DRY_RUN" -eq 1 ] && return 0
-        [ "$OVERWRITE_FOREIGN_SYM_LINK" -eq 1 ] && rm "$SINK_FILE"
-        _LINK_FILES "$SOURCE_FILE" "$SINK_FILE"
+        [ "${OVERWRITE_FOREIGN_SYM_LINK}" -eq 0 ] && \
+                ERR "A foreign link Exist ${SINK_FILE} (${SOURCE_FILE})"
+        [ "${OVERWRITE_FOREIGN_SYM_LINK}" -eq 0 ] && return 1
+        [ "${DRY_RUN}" -eq 1 ] && return 0
+        [ "${OVERWRITE_FOREIGN_SYM_LINK}" -eq 1 ] && rm "${SINK_FILE}"
+        _LINK_FILES "${SOURCE_FILE}" "${SINK_FILE}"
 }
 
 LINK_FILE() {
         SOURCE_DIR=$1; SOURCE_FILE=$2; TARGET_DIR=$3;
 
-        SINK_FILE="$(echo "$SOURCE_FILE" | sed "s|^$SOURCE_DIR/|$TARGET_DIR/|g")"
-        mkdir -p "$(dirname "$SINK_FILE")" # Making source dir
-        _CHECK_FILE "$SOURCE_FILE" "$SINK_FILE"
+        SINK_FILE="$(echo "${SOURCE_FILE}" | sed "s|^${SOURCE_DIR}/|${TARGET_DIR}/|g")"
+        mkdir -p "$(dirname "${SINK_FILE}")" # Making source dir
+        _CHECK_FILE "${SOURCE_FILE}" "${SINK_FILE}"
         _CHECK_FILE_CODE=$?
 
-         case $_CHECK_FILE_CODE in
+         case ${_CHECK_FILE_CODE} in
                  10)
-                         ERR "$SINK_FILE is a directory can't link ($SOURCE_FILE)"
+                         ERR "${SINK_FILE} is a directory can't link (${SOURCE_FILE})"
                          return 1;;
                  20)
-                         _LINK_FILES "$SOURCE_FILE" "$SINK_FILE"
+                         _LINK_FILES "${SOURCE_FILE}" "${SINK_FILE}"
                          return 0;;
                  30)
-                         _H_FILE "$SOURCE_FILE" "$SINK_FILE"
+                         _H_FILE "${SOURCE_FILE}" "${SINK_FILE}"
                          return $?;;
                  40)
-                         _H_BROKEN_SYM_LINK "$SOURCE" "$SINK_FILE"
+                         _H_BROKEN_SYM_LINK "${SOURCE_FILE}" "${SINK_FILE}"
                          return $?;;
                  50)
-                         Vecho "$SOURCE_FILE => $SINK_FILE (already linked)"
+                         Vecho "${SOURCE_FILE} => ${SINK_FILE} (already linked)"
                          return 0;;
                  60)
-                         _H_FOREIGN_SYM_LINK "$SOURCE_FILE" "$SINK_FILE"
+                         _H_FOREIGN_SYM_LINK "${SOURCE_FILE}" "${SINK_FILE}"
                          return $?;;
                  *)
-                         ERR "_CHECK_FILE returned unknown code ($_CHECK_FILE_CODE)" 1;;
+                         ERR "_CHECK_FILE returned unknown code (${_CHECK_FILE_CODE})" 1;;
             esac
 }
 
 UNLINK_FILE() {
         SOURCE_DIR=$1; SOURCE_FILE=$2; TARGET_DIR=$3;
 
-        SINK_FILE="$(echo "$SOURCE_FILE" | sed "s|^$SOURCE_DIR/|$TARGET_DIR/|g")"
-        _CHECK_FILE "$SOURCE_FILE" "$SINK_FILE"
+        SINK_FILE="$(echo "${SOURCE_FILE}" | sed "s|^${SOURCE_DIR}/|${TARGET_DIR}/|g")"
+        _CHECK_FILE "${SOURCE_FILE}" "${SINK_FILE}"
         _CHECK_FILE_CODE=$?
 
-         case $_CHECK_FILE_CODE in
+         case ${_CHECK_FILE_CODE} in
                  50)
-                         Vecho "Deleted: $SINK_FILE (-> $SOURCE_FILE)"
-                         [ "$DRY_RUN" -eq 1 ] && return 0
-                         rm "$SINK_FILE"
+                         Vecho "Deleted: ${SINK_FILE} (-> ${SOURCE_FILE})"
+                         [ "${DRY_RUN}" -eq 1 ] && return 0
+                         rm "${SINK_FILE}"
                          return 0;;
                  20)
                          return 0;;
                  *)
-                         ERR "cannot safely unlink file ($SINK_FILE) ($_CHECK_FILE_CODE)"
+                         ERR "cannot safely unlink file (${SINK_FILE}) (${_CHECK_FILE_CODE})"
                          return 1;;
             esac
 
@@ -133,38 +136,35 @@ UNLINK_FILE() {
 
 FOR_EACH_FILE_IN_PKG() {
     FUNC=$1; SOURCE_DIR=$2; TARGET_DIR=$3
-    SOURCE_FILEs="$(find "$SOURCE_DIR" -type f)"
+    SOURCE_FILEs="$(find "${SOURCE_DIR}" -type f)"
     return_code=0;
 
-    for SOURCE_FILE in $SOURCE_FILEs
+    for SOURCE_FILE in ${SOURCE_FILEs}
     do
-            $FUNC "$SOURCE_DIR" "$SOURCE_FILE" "$TARGET_DIR" || return_code=1
+            ${FUNC} "${SOURCE_DIR}" "${SOURCE_FILE}" "${TARGET_DIR}" || return_code=1
     done
-    return $return_code
+    return "${return_code}"
 }
 
 CHECK_AND_RUN_FOR_PKGs() {
          # do a dry run before changing anything
 
          FUNC=$1; SOURCE_DIRs="$2"; TARGET_DIR=$3
-         pVERBOSE=$VERBOSE; pDRY_RUN=$DRY_RUN; DRY_RUN=1
-         [ "$pDRY_RUN" -eq 0 ]  && VERBOSE=0
-         for SOURCE_DIR in $SOURCE_DIRs
+         pVERBOSE=${VERBOSE}; pDRY_RUN=${DRY_RUN}; DRY_RUN=1
+         [ "${pDRY_RUN}" -eq 0 ]  && VERBOSE=0
+         for SOURCE_DIR in ${SOURCE_DIRs}
          do
-                 [ -d "$SOURCE_DIR" ] || ERR "Cannot find folder '$SOURCE_DIR'!" 1
-                 FOR_EACH_FILE_IN_PKG "$FUNC" "$SOURCE_DIR" "$TARGET_DIR" || ERR "All Abort!" 1
+                 [ -d "${SOURCE_DIR}" ] || ERR "Cannot find folder '${SOURCE_DIR}'!" 1
+                 FOR_EACH_FILE_IN_PKG "${FUNC}" "${SOURCE_DIR}" "${TARGET_DIR}" || ERR "All Abort!" 1
          done
 
-         [ "$pDRY_RUN" -eq 1 ]  && return 0
-         DRY_RUN=$pDRY_RUN && VERBOSE=$pVERBOSE
-         for SOURCE_DIR in $SOURCE_DIRs
+         [ "${pDRY_RUN}" -eq 1 ]  && return 0
+         DRY_RUN=${pDRY_RUN} && VERBOSE=${pVERBOSE}
+         for SOURCE_DIR in ${SOURCE_DIRs}
          do
-                 FOR_EACH_FILE_IN_PKG "$FUNC" "$SOURCE_DIR" "$TARGET_DIR"
+                 FOR_EACH_FILE_IN_PKG "${FUNC}" "${SOURCE_DIR}" "${TARGET_DIR}"
          done
 }
-
-S_=""; D_=""; R_=""
-TARGET_DIR="$HOME"
 
 useage() {
         echo "dls (dotfiles linking script) (compatible with GNU stow)
@@ -196,8 +196,11 @@ author: liupold <rohn.ch@gmail.com>
 
 TEMP=$(getopt -o 'hfblvnt:S:D:R:' --long 'help,overwrite-files,overwrite-broken,overwrite-link,verbose,simulate,target:,link:,delete:,re-link:' -n 'dls' -- "$@") || useage 1
 
-eval set -- "$TEMP"
+eval set -- "${TEMP}"
 unset TEMP
+
+S_=""; D_=""; R_=""
+TARGET_DIR="${HOME}"
 
 while true; do
     case "$1" in
@@ -224,13 +227,13 @@ while true; do
             TARGET_DIR="$2"
             shift 2; continue;;
         '-S'|'--link')
-            S_="$S_ $2"
+            S_="${S_} $2"
             shift 2; continue;;
         '-D'|'--delete')
-            D_="$D_ $2"
+            D_="${D_} $2"
             shift 2; continue;;
         '-R'|'--re-link')
-            R_="$R_ $2"
+            R_="${R_} $2"
             shift 2; continue;;
          '--')
              shift; break;;
@@ -240,7 +243,8 @@ while true; do
      esac
 done
 
-[ "$@" ] && ERR "Unrecognized trailing option '$*'" 1
-CHECK_AND_RUN_FOR_PKGs UNLINK_FILE "$D_ $R_" "$TARGET_DIR"
-CHECK_AND_RUN_FOR_PKGs LINK_FILE  "$S_ $R_" "$TARGET_DIR"
+[ -z "${S_}${D_}${R_}" ] && useage 1
+[ -n "$*" ] && ERR "Unrecognized trailing option '$*'" 1
+CHECK_AND_RUN_FOR_PKGs UNLINK_FILE "${D_} ${R_}" "${TARGET_DIR}"
+CHECK_AND_RUN_FOR_PKGs LINK_FILE  "${S_} ${R_}" "${TARGET_DIR}"
 
